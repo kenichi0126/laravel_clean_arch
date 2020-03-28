@@ -1,0 +1,72 @@
+version: 0.2
+
+#env:
+
+  #variables:
+    #ECR_REPOSITORY_NAME: "smart2"
+
+  #parameter-store:
+     # key: "value"
+     # key: "value"
+
+
+phases:
+
+  install:
+    commands:
+      - printenv
+      - echo "========================================="
+      - pwd
+      - ls -alt
+      - echo "${CHANGE_BRANCH}"
+      - echo "========================================="
+    #finally:
+      # - command
+      # - command
+
+  pre_build:
+    commands:
+      - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
+      - REPOSITORY_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}
+
+      - echo "Logging in to Amazon ECR..."
+      - $(aws ecr get-login --region ${AWS_DEFAULT_REGION} --no-include-email)
+
+      - echo "docker version is..."
+      - docker version
+
+      - echo "get image..."
+      - docker pull ${REPOSITORY_URI}:${HEAD_REV}
+
+    #finally:
+      # - command
+      # - command
+
+  build:
+    commands:
+      - echo "Execute Test"
+      - docker-compose version
+
+    #finally:
+      # - command
+      # - command
+
+  post_build:
+    commands:
+      - mkdir -p storage/build
+      - touch storage/build/test.txt
+
+      - echo "Pushing the Docker image..."
+      - docker tag ${REPOSITORY_URI}:${HEAD_REV} ${REPOSITORY_URI}:${CHANGE_BRANCH}
+      - docker push ${REPOSITORY_URI}:${CHANGE_BRANCH}
+
+    #finally:
+      # - command
+      # - command
+
+
+artifacts:
+
+  files:
+    - "**/*"
+  base-directory: storage/build

@@ -1,0 +1,26 @@
+{
+    "name": "switch-m/smart-api-queries",
+    "require": {
+        "php": "^7.1.3",
+        "laravel/framework": "^6.2"
+    },
+    "require-dev": {
+        "mockery/mockery": "^1.0",
+        "phpunit/phpunit": "^8.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Switchm\\SmartApi\\Components\\": "src/Switchm/SmartApi/Components/",
+            "Switchm\\SmartApi\\Queries\\": "../smart-api-queries/src/Switchm/SmartApi/Queries/",
+            "Smart2\\": "../../../packages/Smart2/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Switchm\\SmartApi\\Queries\\Tests\\": "tests/"
+        }
+    },
+    "repositories": [
+        { "type": "path", "url": "../../", "options": { "symlink": true } }
+    ]
+}

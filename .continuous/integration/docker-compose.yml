@@ -1,0 +1,10 @@
+version: '3.7'
+
+services:
+    app:
+        image: ${CACHE_IMAGE_URL}
+        hostname: app
+        domainname: test-smart2.local
+        volumes:
+            - ../../storage:/usr/src/app/storage
+        tty: true

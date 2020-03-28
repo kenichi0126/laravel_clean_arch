@@ -1,0 +1,98 @@
+name: UnitTest
+
+on:
+    pull_request:
+        branches:
+            - master
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        env:
+            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_DEFAULT_REGION: ap-northeast-1
+            ECR_REPOSITORY_URI: 406795679565.dkr.ecr.ap-northeast-1.amazonaws.com/${{ github.event.repository.name }}
+
+            COVERAGE_BASE_S3_URL: s3://switchm-corp-global-continuous/${{ github.event.repository.name }}/coverage/${{ github.event.pull_request.number }}
+            COVERAGE_BASE_URL: https://continuous.switch-m.biz/${{ github.event.repository.name }}/coverage/${{ github.event.pull_request.number }}
+
+        steps:
+            - uses: actions/checkout@v1
+
+            - name: aws cli install
+              run: |
+                  pip install --upgrade pip awscli
+
+            - name: Login to ECR
+              run: |
+                  $(aws ecr get-login --no-include-email --region ap-northeast-1)
+
+            - name: Docker pull
+              run: |
+                  HEAD_REF=`echo ${{ github.event.pull_request.head.ref }} | sed -e "s/\//-/g"`
+                  docker pull ${{ env.ECR_REPOSITORY_URI }}:$HEAD_REF || docker pull ${{ env.ECR_REPOSITORY_URI }}:master || true
+
+            - name: Docker image build
+              run: |
+                  CACHE_IMAGE_URL=$(docker images --filter="dangling=false" --format "{{.Repository}}:{{.Tag}}" ${{ env.ECR_REPOSITORY_URI }})
+                  HEAD_REF=`echo ${{ github.event.pull_request.head.ref }} | sed -e "s/\//-/g"`
+                  BUILD_COMMAND="docker build -f .continuous/integration/docker/app/Dockerfile -t ${{ env.ECR_REPOSITORY_URI }}:$HEAD_REF ."
+                  [ -n "$CACHE_IMAGE_URL" ] && eval "$BUILD_COMMAND --cache-from $CACHE_IMAGE_URL" || $BUILD_COMMAND
+
+            - name: Docker-compose setting
+              run: |
+                  CACHE_IMAGE_URL=$(docker images --filter="dangling=false" --format "{{.Repository}}:{{.Tag}}" ${{ env.ECR_REPOSITORY_URI }})
+                  echo "CACHE_IMAGE_URL=${CACHE_IMAGE_URL}" >> .env
+                  docker-compose --project-directory .continuous/integration --file .continuous/integration/docker-compose.yml up -d
+                  docker-compose --project-directory .continuous/integration --file .continuous/integration/docker-compose.yml exec -T app composer composer-install-all
+
+            - name: Check coding standards
+              run: |
+                  docker-compose --project-directory .continuous/integration --file .continuous/integration/docker-compose.yml exec -T app ./vendor/bin/php-cs-fixer --ansi fix --dry-run
+
+            - name: App tests
+              run: |
+                  docker-compose --project-directory .continuous/integration --file .continuous/integration/docker-compose.yml exec -T app composer coverage:app
+
+            - name: Usecases tests
+              run: |
+                  docker-compose --project-directory .continuous/integration --file .continuous/integration/docker-compose.yml exec -T app composer coverage:components
+
+            - name: Queries tests
+              run: |
+                  docker-compose --project-directory .continuous/integration --file .continuous/integration/docker-compose.yml exec -T app composer coverage:queries
+
+            - name: Upload coverage files to S3
+              run: |
+                  aws s3 sync --exact-timestamps --delete storage/build/coverage/queries ${{ env.COVERAGE_BASE_S3_URL }}/queries/
+                  aws s3 sync --exact-timestamps --delete storage/build/coverage/app ${{ env.COVERAGE_BASE_S3_URL }}/app/
+                  aws s3 sync --exact-timestamps --delete storage/build/coverage/components ${{ env.COVERAGE_BASE_S3_URL }}/components/
+
+            - name: Docker image push
+              run: |
+                  HEAD_REF=`echo ${{ github.event.pull_request.head.ref }} | sed -e "s/\//-/g"`
+                  docker push ${{ env.ECR_REPOSITORY_URI }}:$HEAD_REF
+                  #docker tag ${{ env.ECR_REPOSITORY_URI }}:$HEAD_REF ${{ env.ECR_REPOSITORY_URI }}:${{ github.event.pull_request.head.sha }}
+                  #docker push ${{ env.ECR_REPOSITORY_URI }}:${{ github.event.pull_request.head.sha }}
+
+            - name: Slack notification
+              env:
+                  SLACK_WEBHOOK: ${{ secrets.SLACK_INCOMING_WEBHOOK_URL }}
+                  SLACK_USERNAME: Github Actions(${{ github.event.repository.name }})
+                  SLACK_CHANNEL: system-continuous
+              run: |
+                  HEAD_REF=`echo ${{ github.event.pull_request.head.ref }} | sed -e "s/\//-/g"`
+                  PAYLOAD="{\"channel\": \"${SLACK_CHANNEL}\", \"username\": \"${SLACK_USERNAME}\", \
+                  \"text\": \"switch-m/${{ github.event.repository.name }}/UnitTest triggered by ${{ github.event.pull_request.user.login }} (pull_request: #${{ github.event.pull_request.number }})\n \
+                  Status: OK\n \
+                  Confirm code coverages following files\n \
+                  ${{ env.COVERAGE_BASE_URL }}/app/index.html\n \
+                  ${{ env.COVERAGE_BASE_URL }}/components/index.html\n \
+                  ${{ env.COVERAGE_BASE_URL }}/queries/index.html\n \
+                  DockerImageUrl: ${{ env.ECR_REPOSITORY_URI }}:$HEAD_REF \
+                  \", \
+                  \"icon_emoji\": \":octocat:\"}"
+                  curl -X POST --data-urlencode "payload=${PAYLOAD}" ${SLACK_WEBHOOK}
+

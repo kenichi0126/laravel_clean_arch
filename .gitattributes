@@ -1,0 +1,4 @@
+* text=auto
+CHANGELOG.md export-ignore
+
+*.sql linguist-vendored -text

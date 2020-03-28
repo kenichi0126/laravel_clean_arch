@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit backupGlobals="false"
+         backupStaticAttributes="false"
+         bootstrap="vendor/autoload.php"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true"
+         processIsolation="false"
+         stopOnFailure="false"
+         verbose="true">
+    <testsuites>
+        <testsuite name="smart-api-queries">
+            <directory suffix="Test.php">tests</directory>
+        </testsuite>
+    </testsuites>
+    <filter>
+        <whitelist processUncoveredFilesFromWhitelist="true">
+            <directory suffix=".php">src</directory>
+        </whitelist>
+    </filter>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="CACHE_DRIVER" value="array"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="MAIL_DRIVER" value="array"/>
+        <env name="SMART_WRITE_RDB_HOST" value="testdb"/>
+        <env name="SMART_WRITE_RDB_PASSWORD" value="secret"/>
+        <env name="SMART_READ_RDB_HOST" value="testdb"/>
+        <env name="SMART_READ_RDB_PASSWORD" value="secret"/>
+        <env name="SMART_DWH_HOST" value="testdb"/>
+        <env name="SMART_DWH_PORT" value="5432"/>
+        <env name="SMART_DWH_PASSWORD" value="secret"/>
+    </php>
+</phpunit>

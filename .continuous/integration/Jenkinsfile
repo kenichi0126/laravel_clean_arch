@@ -1,0 +1,167 @@
+#!groovy
+
+/**
+ * Jenkinsfile
+ */
+
+def userRemoteConfig = scm.userRemoteConfigs.head()
+
+pipeline {
+  /*
+  options {
+    skipDefaultCheckout()
+  }
+  */
+
+  agent {
+    node {
+      label 'master'
+      customWorkspace "/var/lib/jenkins/workspace/${URLDecoder.decode(env.JOB_NAME).replaceAll("/", "-").replaceAll("_", "-")}"
+    }
+  }
+
+  environment {
+    AWS_DEFAULT_REGION = 'ap-northeast-1'
+    CODEBUILD_PROJECT_NAME = 'Smart'
+    S3_BUCKET = 'switchm-corp-global-continuous'
+    ARCHIVE_NAME = "${env.BUILD_NUMBER}-source.zip"
+  }
+
+  stages {
+    stage('initial') {
+      steps {
+        script {
+          env.CHANGE_BRANCH = sh(
+            script: 'echo "${BRANCH_NAME}" | sed -e "s/\\//-/g" | sed -e "s/\\_/-/g"',
+            returnStdout: true
+          ).trim()
+
+          env.GIT_URL = sh(
+            script: 'git config --get remote.origin.url',
+            returnStdout: true
+          ).trim()
+
+          env.REPOSITORY_NAME = sh(
+            script: 'basename "${GIT_URL}" ".${GIT_URL##*.}"',
+            returnStdout: true
+          ).trim()
+
+          env.HEAD_REV = sh(
+            script: 'git rev-parse HEAD',
+            returnStdout: true
+          ).trim()
+
+          env.HEAD_BEFORE_REV = sh(
+            script: 'git rev-parse HEAD~1',
+            returnStdout: true
+          ).trim()
+
+          echo "Hello from Pipeline"
+        }
+      }
+    }
+
+    stage('debug') {
+      steps {
+        script {
+          sh "printenv"
+          sh "pwd"
+        }
+      }
+    }
+
+    stage('source_upload') {
+      steps {
+        sh "pwd"
+        sh "rm -rf output"
+        sh "mkdir -p output"
+        sh "git archive HEAD -o output/${env.ARCHIVE_NAME}"
+        sh "aws s3 sync --quiet ./output s3://${env.S3_BUCKET}/${env.REPOSITORY_NAME}/${env.CHANGE_BRANCH}"
+      }
+    }
+
+    stage('codebuild') {
+      parallel {
+        stage('build1') {
+          steps {
+            awsCodeBuild(
+              credentialsType: 'keys',
+              region: env.AWS_DEFAULT_REGION,
+              projectName: env.CODEBUILD_PROJECT_NAME,
+              sourceControlType: 'project', // Source control type is required and must be 'jenkins' or 'project'
+              sourceTypeOverride: 'S3',
+              sourceLocationOverride: "${env.S3_BUCKET}/${env.REPOSITORY_NAME}/${env.CHANGE_BRANCH}/${env.ARCHIVE_NAME}",
+              buildSpecFile: '.continuous/integration/buildspecs/build.yml',
+              envVariables: """
+              [
+                { AWS_DEFAULT_REGION, ${env.AWS_DEFAULT_REGION} },
+                { ECR_REPOSITORY_NAME, ${env.REPOSITORY_NAME} },
+                { HEAD_REV, ${env.HEAD_REV} },
+                { HEAD_BEFORE_REV, ${env.HEAD_BEFORE_REV} },
+                { TEST, kinoshita }
+              ]
+              """,
+            )
+          }
+        }
+
+        /*
+        stage('build2') {
+          steps {
+            awsCodeBuild(
+              credentialsType: 'keys',
+              region: env.AWS_DEFAULT_REGION,
+              projectName: env.CODEBUILD_PROJECT_NAME,
+              sourceControlType: 'project', // Source control type is required and must be 'jenkins' or 'project'
+              sourceVersion: env.CHANGE_BRANCH,
+            )
+          }
+        }
+        */
+      }
+    }
+
+    stage('test') {
+      steps {
+        awsCodeBuild(
+          credentialsType: 'keys',
+          region: env.AWS_DEFAULT_REGION,
+          projectName: env.CODEBUILD_PROJECT_NAME,
+          sourceControlType: 'project', // Source control type is required and must be 'jenkins' or 'project'
+          sourceTypeOverride: 'S3',
+          sourceLocationOverride: "${env.S3_BUCKET}/${env.REPOSITORY_NAME}/${env.CHANGE_BRANCH}/${env.ARCHIVE_NAME}",
+          artifactTypeOverride: "S3",
+          artifactLocationOverride: "${env.S3_BUCKET}",
+          artifactPathOverride: "${env.REPOSITORY_NAME}/${env.CHANGE_BRANCH}",
+          artifactNameOverride: "${env.BUILD_NUMBER}-test.zip",
+          artifactNamespaceOverride: "NONE",
+          artifactPackagingOverride: "ZIP",
+          buildSpecFile: '.continuous/integration/buildspecs/test.yml',
+          envVariables: """
+          [
+            { AWS_DEFAULT_REGION, ${env.AWS_DEFAULT_REGION} },
+            { ECR_REPOSITORY_NAME, ${env.REPOSITORY_NAME} },
+            { CHANGE_BRANCH, ${env.CHANGE_BRANCH} },
+            { HEAD_REV, ${env.HEAD_REV} },
+            { TEST, kinoshita }
+          ]
+          """,
+        )
+      }
+    }
+
+  }
+
+  post {
+    always {
+      echo 'always'
+      sh "pwd"
+    }
+    success {
+      echo 'success'
+    }
+    failure {
+      echo 'failure'
+    }
+  }
+}
