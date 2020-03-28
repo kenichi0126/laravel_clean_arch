@@ -1,28 +1,26 @@
-# smart2
-
 ## usage
 
 ```bash
 cd $HOME/workspace
 
-git clone git@github.com:switch-m/smart2.git
+git clone git@github.com:switch-m/laravel_clean_arch.git
 
-cd smart2
+cd laravel_clean_arch
 
 sed \
-  -e "s/\(SMART_WRITE_RDB_HOST=\)\(.*\)/\1db/g" \
-  -e "s/\(SMART_WRITE_RDB_PASSWORD=\)\(.*\)/\1THr8Tz7sTU4p/g" \
-  -e "s/\(SMART_READ_RDB_HOST=\)\(.*\)/\1db/g" \
-  -e "s/\(SMART_READ_RDB_PASSWORD=\)\(.*\)/\1THr8Tz7sTU4p/g" \
-  -e "s/\(SMART_DWH_HOST=\)\(.*\)/\1db/g" \
-  -e "s/\(SMART_DWH_PASSWORD=\)\(.*\)/\1THr8Tz7sTU4p/g" \
+  -e "s/\(WRITE_RDB_HOST=\)\(.*\)/\1db/g" \
+  -e "s/\(WRITE_RDB_PASSWORD=\)\(.*\)/\1THr8Tz7sTU4p/g" \
+  -e "s/\(READ_RDB_HOST=\)\(.*\)/\1db/g" \
+  -e "s/\(READ_RDB_PASSWORD=\)\(.*\)/\1THr8Tz7sTU4p/g" \
+  -e "s/\(DWH_HOST=\)\(.*\)/\1db/g" \
+  -e "s/\(DWH_PASSWORD=\)\(.*\)/\1THr8Tz7sTU4p/g" \
   -e "s/\(REDIS_HOST=\)\(.*\)/\1cache/g" \
   .env.example > .env
 
 # 下記の最新の情報をメンバーに聞いて.envを更新する
-* SMART_WRITE_RDB_HOST
-* SMART_READ_RDB_HOST
-* SMART_DWH_HOST
+* WRITE_RDB_HOST
+* READ_RDB_HOST
+* DWH_HOST
 * REDIS_HOST
 * AWS_ACCESS_KEY_ID
 * AWS_SECRET_ACCESS_KEY
